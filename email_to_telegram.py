@@ -143,12 +143,16 @@ def format_articles(articles):
     return messages
 
 def send_to_telegram(messages):
-    for msg in messages:
+    for i, msg in enumerate(messages):
+        # Only the header (first message) triggers a notification ring;
+        # all article blocks and the footer are sent silently.
+        silent = (i != 0)
         response = requests.post(BOT_API_URL, data={
             'chat_id': CHAT_ID,
             'text': msg,
             'parse_mode': 'Markdown',
-            'disable_web_page_preview': True
+            'disable_web_page_preview': True,
+            'disable_notification': silent
         })
         if response.status_code != 200:
             print(f"Failed to send message: {response.text}")
