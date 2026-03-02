@@ -12,7 +12,7 @@ load_dotenv()
 EMAIL = os.getenv('EMAIL')
 PASSWORD = os.getenv('PASSWORD')
 BOT_API_URL = os.getenv('BOT_API_URL')
-CHAT_ID = os.getenv('CHAT_ID')
+CHAT_IDS = [cid.strip() for cid in os.getenv('CHAT_IDS', os.getenv('CHAT_ID', '')).split(',') if cid.strip()]
 
 def fetch_email_data():
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
@@ -160,28 +160,30 @@ def format_articles(articles):
     return messages
 
 def send_to_telegram(messages):
-    for i, msg in enumerate(messages):
-        # Only the header (first message) triggers a notification ring;
-        # all article blocks and the footer are sent silently.
-        silent = (i != 0)
-        response = requests.post(BOT_API_URL, data={
-            'chat_id': CHAT_ID,
-            'text': msg,
-            'parse_mode': 'Markdown',
-            'disable_web_page_preview': True,
-            'disable_notification': silent
-        })
-        if response.status_code != 200:
-            print(f"Failed to send message: {response.text}")
-            return False
-    return True
+    success = True
+    for chat_id in CHAT_IDS:
+        for i, msg in enumerate(messages):
+            # Only the header (first message) triggers a notification ring;
+            # all article blocks and the footer are sent silently.
+            silent = (i != 0)
+            response = requests.post(BOT_API_URL, data={
+                'chat_id': chat_id,
+                'text': msg,
+                'parse_mode': 'Markdown',
+                'disable_web_page_preview': True,
+                'disable_notification': silent
+            })
+            if response.status_code != 200:
+                print(f"Failed to send message to {chat_id}: {response.text}")
+                success = False
+    return success
 
 def main():
     articles = fetch_email_data()
     if articles:
         messages = format_articles(articles)
         if send_to_telegram(messages):
-            print(f"✅ Sent {len(articles)} articles to Telegram successfully.")
+            print(f"✅ Sent {len(articles)} articles to {len(CHAT_IDS)} chat(s) successfully.")
         else:
             print("❌ Failed to send some messages.")
     else:
