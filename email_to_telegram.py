@@ -19,18 +19,35 @@ def fetch_email_data():
     mail.login(EMAIL, PASSWORD)
     mail.select('inbox')
 
-    result, data = mail.search(None, '(FROM "varunchopra2003@gmail.com")')
+    result, data = mail.search(None, '(FROM "noreply@medium.com")')
 
-    articles = []
+    # Use today's local date — not a rolling time window — so we never
+    # accidentally pick up yesterday's digest (which could still be within
+    # a 22-hour window if Medium sent it in the afternoon).
+    today_local = datetime.now(timezone.utc).astimezone().date()
+
+    candidates = []
     for num in data[0].split():
         result, email_data = mail.fetch(num, '(RFC822)')
         msg = email.message_from_bytes(email_data[0][1])
-        if (datetime.now(timezone.utc) - parsedate_to_datetime(msg['Date'])).total_seconds() < 22 * 3600:
-            if msg.is_multipart():
-                for part in msg.walk():
-                    if part.get_content_type() == 'text/html':
-                        html_content = part.get_payload(decode=True).decode()
-                        articles = extract_content(html_content)
+        msg_date = parsedate_to_datetime(msg['Date'])
+        if msg_date.astimezone().date() == today_local:
+            candidates.append((msg_date, msg))
+
+    if not candidates:
+        return []
+
+    # Take the most recent email from today (in case there are multiples)
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    _, latest_msg = candidates[0]
+
+    articles = []
+    if latest_msg.is_multipart():
+        for part in latest_msg.walk():
+            if part.get_content_type() == 'text/html':
+                html_content = part.get_payload(decode=True).decode()
+                articles = extract_content(html_content)
+                break  # Only parse the first HTML part
 
     return articles
 
